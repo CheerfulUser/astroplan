@@ -30,7 +30,7 @@ class ObservingBlock(object):
     constraints on observations.
     """
     @u.quantity_input(duration=u.second)
-    def __init__(self, target, duration, priority, configuration={}, constraints=None, name=None):
+    def __init__(self, target, duration, priority, configuration={}, constraints=None):
         """
         Parameters
         ----------
@@ -52,16 +52,12 @@ class ObservingBlock(object):
             that constraints applicable to the entire list should go into the
             scheduler.
 
-        name : integer or str
-            User-defined name or ID.
-
         """
         self.target = target
         self.duration = duration
         self.priority = priority
         self.configuration = configuration
         self.constraints = constraints
-        self.name = name
         self.start_time = self.end_time = None
         self.observer = None
 
@@ -235,7 +231,7 @@ class Schedule(object):
     def __init__(self, start_time, end_time, constraints=None):
         """
         Parameters
-        ----------
+        -----------
         start_time : `~astropy.time.Time`
             The starting time of the schedule; the start of your
             observing window.
@@ -276,37 +272,48 @@ class Schedule(object):
         ra = []
         dec = []
         config = []
+        exptime = []
+        repeats = []
         for slot in self.slots:
             if hasattr(slot.block, 'target'):
                 start_times.append(slot.start.iso)
                 end_times.append(slot.end.iso)
-                durations.append(slot.duration.to(u.minute).value)
+                durations.append(np.round(slot.duration.to(u.minute).value,2))
                 target_names.append(slot.block.target.name)
-                ra.append(u.Quantity(slot.block.target.ra))
-                dec.append(u.Quantity(slot.block.target.dec))
+                ra.append(slot.block.target.ra.to_string(u.hour))
+                dec.append(slot.block.target.dec.to_string(u.degree, alwayssign=True))
                 config.append(slot.block.configuration)
+                exptime.append(int(slot.block.time_per_exposure.value))
+                repeats.append(int(slot.block.number_exposures))
+
             elif show_transitions and slot.block:
                 start_times.append(slot.start.iso)
                 end_times.append(slot.end.iso)
-                durations.append(slot.duration.to(u.minute).value)
+                durations.append(np.round(slot.duration.to(u.minute).value,2))
                 target_names.append('TransitionBlock')
                 ra.append('')
                 dec.append('')
                 changes = list(slot.block.components.keys())
+                exptime.append('')
+                repeats.append('')
                 if 'slew_time' in changes:
                     changes.remove('slew_time')
                 config.append(changes)
             elif slot.block is None and show_unused:
                 start_times.append(slot.start.iso)
                 end_times.append(slot.end.iso)
-                durations.append(slot.duration.to(u.minute).value)
+                durations.append(np.round(slot.duration.to(u.minute).value,2))
                 target_names.append('Unused Time')
                 ra.append('')
                 dec.append('')
                 config.append('')
-        return Table([target_names, start_times, end_times, durations, ra, dec, config],
+                exptime.append('')
+                repeats.append('')
+        return Table([target_names, start_times, end_times, durations,
+                      ra, dec, config,exptime,repeats],
                      names=('target', 'start time (UTC)', 'end time (UTC)',
-                            'duration (minutes)', 'ra', 'dec', 'configuration'))
+                            'duration (minutes)', 'ra', 'dec', 'configuration',
+                            'exptime (s)', 'repeats'))
 
     def new_slots(self, slot_index, start_time, end_time):
         """
@@ -431,7 +438,7 @@ class Slot(object):
     def __init__(self, start_time, end_time):
         """
         Parameters
-        ----------
+        -----------
         start_time : `~astropy.time.Time`
             The starting time of the slot
         end_time : `~astropy.time.Time`
@@ -766,7 +773,7 @@ class PriorityScheduler(Scheduler):
             # Select the most optimal time
 
             # calculate the number of time slots needed for this exposure
-            _stride_by = int(np.ceil(float(b.duration / time_resolution)))
+            _stride_by = np.int(np.ceil(float(b.duration / time_resolution)))
 
             # Stride the score arrays by that number
             _strided_scores = stride_array(constraint_scores, _stride_by)
@@ -810,7 +817,7 @@ class PriorityScheduler(Scheduler):
 
     def attempt_insert_block(self, b, new_start_time, start_time_idx):
         # set duration to be exact multiple of time resolution
-        duration_indices = int(np.floor(
+        duration_indices = np.int(np.ceil(
             float(b.duration / self.time_resolution)))
         b.duration = duration_indices * self.time_resolution
 
@@ -877,7 +884,7 @@ class PriorityScheduler(Scheduler):
         # tweak durations to exact multiple of time resolution
         for block in (tb_before, tb_after):
             if block is not None:
-                block.duration = self.time_resolution * int(
+                block.duration = self.time_resolution * np.int(
                     np.ceil(float(block.duration / self.time_resolution))
                 )
 
@@ -894,7 +901,7 @@ class PriorityScheduler(Scheduler):
             ob_offset = 2 if tb_before_already_exists else 1
             previous_ob = self.schedule.slots[slot_index - ob_offset]
             if tb_before:
-                transition_indices = int(tb_before.duration / self.time_resolution)
+                transition_indices = np.int(tb_before.duration / self.time_resolution)
             else:
                 transition_indices = 0
 
@@ -909,7 +916,7 @@ class PriorityScheduler(Scheduler):
             next_ob = self.schedule.slots[slot_index + slot_offset].block
             end_idx = start_time_idx + duration_indices
             if tb_after:
-                end_idx += int(tb_after.duration / self.time_resolution)
+                end_idx += np.int(tb_after.duration/self.time_resolution)
                 if end_idx >= next_ob.start_idx:
                     # cannot schedule
                     return False

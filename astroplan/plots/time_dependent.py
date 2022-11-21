@@ -51,7 +51,7 @@ def _has_twin(ax):
 def plot_airmass(targets, observer, time, ax=None, style_kwargs=None,
                  style_sheet=None, brightness_shading=False,
                  altitude_yaxis=False, min_airmass=1.0, min_region=None,
-                 max_airmass=3.0, max_region=None, use_local_tz=False):
+                 max_airmass=3.0, max_region=None, use_local_tz=True):
     r"""
     Plots airmass as a function of time for a given target.
 
@@ -252,8 +252,8 @@ def plot_airmass(targets, observer, time, ax=None, style_kwargs=None,
         ax.axhspan(min_region, ymin, facecolor='#F9EB4E', alpha=0.10)
 
     # Set labels.
-    ax.set_ylabel("Airmass")
-    ax.set_xlabel("Time from {0} [{1}]".format(min(timetoplot).datetime.date(), tzname))
+    ax.set_ylabel("Airmass",fontsize=15)
+    ax.set_xlabel("Time from {0} [{1}]".format(min(timetoplot).datetime.date(), tzname),fontsize=15)
 
     if altitude_yaxis and not _has_twin(ax):
         altitude_ticks = np.array([90, 60, 50, 40, 30, 20])
@@ -463,7 +463,7 @@ def plot_altitude(targets, observer, time, ax=None, style_kwargs=None,
     return ax
 
 
-def plot_schedule_airmass(schedule, show_night=False):
+def plot_schedule_airmass(schedule, show_night=False,use_local_tz=True):
     """
     Plots when observations of targets are scheduled to occur superimposed
     upon plots of the airmasses of the targets.
@@ -490,7 +490,8 @@ def plot_schedule_airmass(schedule, show_night=False):
     color_idx = np.linspace(0, 1, len(targets))
     # lighter, bluer colors indicate higher priority
     for target, ci in zip(set(targets), color_idx):
-        plot_airmass(target, schedule.observer, ts, style_kwargs=dict(color=plt.cm.cool(ci)))
+        plot_airmass(target, schedule.observer, ts, style_kwargs=dict(color=plt.cm.cool(ci)),
+                     use_local_tz=use_local_tz)
         targ_to_color[target.name] = plt.cm.cool(ci)
     if show_night:
         # I'm pretty sure this overlaps a lot, creating darker bands
